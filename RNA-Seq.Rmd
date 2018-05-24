@@ -1,0 +1,104 @@
+---
+title: "RNA-Seq"
+author: "Paaksum Wong"
+date: "May 9, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Load Packages and Data
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+#source("http://www.bioconductor.org/biocLite.R")
+#biocLite("DESeq2")
+library("Biobase")
+library("DESeq2")
+library("limma")
+library("edgeR")
+load('bottomly_eset.RData')
+```
+
+#Practice Data
+
+```{r, warning=FALSE}
+eset<-bottomly.2reps
+cpm.mat<-log(cpm(exprs(eset)))
+mean.vec<-apply(cpm.mat, 1, mean)
+sdvec<-apply(cpm.mat, 1, sd)
+plot(mean.vec, sdvec, pch=".", main="2 replicates", ylab="sd", xlab="Average logCPM")
+```
+
+```{r, warning=FALSE, message=FALSE}
+eset<-bottomly.eset
+cpm.mat<-log(cpm(exprs(eset)))
+mean.vec<-apply(cpm.mat, 1, mean)
+sdvec<-apply(cpm.mat, 1, sd)
+plot(mean.vec, sdvec, pch=".", main="10 replicates", ylab="sd", xlab="Average logCPM")
+```
+
+##DESeq2
+
+```{r, warning=FALSE, message=FALSE}
+#Create DESeq2 datasets
+dds<-DESeqDataSetFromMatrix(countData = exprs(bottomly.eset), colData = pData(bottomly.eset), design = ~strain)
+dds<-DESeq(dds)
+
+dds.2rep<-DESeqDataSetFromMatrix(countData = exprs(bottomly.2reps), colData = pData(bottomly.2reps), design = ~strain)
+dds.2rep<-DESeq(dds.2rep)
+
+#Plot dispersion estimates
+plotDispEsts(dds, main="10 replicates")
+plotDispEsts(dds.2rep, main="2 replicates")
+```
+
+##edgeR
+
+```{r, warning=FALSE, message=FALSE}
+dge <- DGEList(counts=exprs(bottomly.eset), group=pData(bottomly.eset)$strain)
+
+# Normalize by total count
+dge <- calcNormFactors(dge)
+
+# Create the contrast matrix
+design.mat <- model.matrix(~ 0 + dge$samples$group)
+colnames(design.mat) <- levels(dge$samples$group)
+
+# Estimate dispersion parameter for GLM
+dge <- estimateGLMCommonDisp(dge, design.mat)
+dge <- estimateGLMTrendedDisp(dge, design.mat, method="power")
+dge<- estimateGLMTagwiseDisp(dge,design.mat)
+plotBCV(dge)
+```
+
+##Limma-voom
+
+Voom transformation (variance modelling at the observational level) is applied to read counts, using gene variance to create weights for use in linear models.
+
+```{r}
+#Create design matrix
+design<-model.matrix(~pData(bottomly.eset)$strain)
+
+#Apply voom transformation
+nf<-calcNormFactors(bottomly.eset)
+v<-voom(exprs(bottomly.eset), design, lib.size = colSums(exprs(bottomly.eset))*nf, normalize.method = "quantile", plot = TRUE)
+
+#Do same for 2 and 5 replicate datasets
+```
+
+```{r}
+#directory<-'/Users/paaks/Downloads/raw_count_files'
+#sampleFiles<-c("treated1.txt","treated2.txt","treated3.txt","untreated1.txt","untreated2.txt","untreated3.txt")
+#sampleCondition<-c('treated','treated','treated','untreated','untreated','untreated')
+#sampleTable<-data.frame(sampleName=sampleFiles, fileName=sampleFiles,condition=sampleCondition)
+#ddsHTSeq<-DESeqDataSetFromHTSeqCount(sampleTable=sampleTable,directory=directory, design=~condition)
+#colData(ddsHTSeq)$condition<-factor(colData(ddsHTSeq)$condition, levels = c('untreated','treated'))
+#dds<-DESeq(ddsHTSeq)
+#res<-results(dds)
+#res<-res[order(res$padj),]
+#head(res)
+#plotMA(dds,ylim=c(-2,2),main='DESeq2')
+#mcols(res,use.names=TRUE)
+#write.csv(as.data.frame(res),file='sim_condition_treated_results_deseq2.csv')
+```
